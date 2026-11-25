@@ -1,0 +1,264 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Iris ML Simulator — Predictor Interactivo</title>
+<style>
+:root {
+  --bg: #0b0d10;
+  --panel: #12161c;
+  --border: #232a34;
+  --text: #f3f5f8;
+  --muted: #9aa4b2;
+  --accent: #ffffff;
+  --accent-soft: rgba(255, 255, 255, 0.08);
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+  line-height: 1.5;
+  padding: 24px;
+}
+.container { max-width: 960px; margin: 0 auto; display: grid; gap: 20px; }
+header {
+  border: 1px solid var(--border);
+  background: var(--panel);
+  border-radius: 12px;
+  padding: 20px;
+  display: grid;
+  gap: 10px;
+}
+header h1 { font-size: 1.25rem; font-weight: 600; }
+header p { color: var(--muted); font-size: 0.9rem; }
+.api-bar { display: flex; gap: 8px; width: 100%; }
+.api-bar input {
+  flex: 1;
+  background: var(--bg);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 8px 12px;
+  font-size: 0.88rem;
+}
+.grid { display: grid; grid-template-columns: 1.15fr 0.85fr; gap: 20px; }
+@media (max-width: 780px) { .grid { grid-template-columns: 1fr; } }
+.card {
+  border: 1px solid var(--border);
+  background: var(--panel);
+  border-radius: 12px;
+  padding: 20px;
+  display: grid;
+  gap: 16px;
+}
+.card-title {
+  font-size: 1rem;
+  font-weight: 600;
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 10px;
+}
+.presets { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+button {
+  background: var(--accent-soft);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 8px 12px;
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+button:hover { border-color: var(--text); }
+button.primary {
+  background: var(--accent);
+  color: var(--bg);
+  font-weight: 600;
+  border-color: var(--accent);
+}
+.control { display: grid; gap: 6px; }
+.control-top { display: flex; justify-content: space-between; font-size: 0.9rem; }
+.control-hint { font-size: 0.78rem; color: var(--muted); }
+input[type="range"] { width: 100%; accent-color: #ffffff; cursor: pointer; }
+.result-box {
+  border: 1px solid var(--border);
+  background: var(--bg);
+  border-radius: 10px;
+  padding: 16px;
+  display: grid;
+  gap: 6px;
+}
+.species { font-size: 1.5rem; font-weight: 700; text-transform: capitalize; }
+.meta { font-size: 0.85rem; color: var(--muted); }
+.prob-list { display: grid; gap: 10px; }
+.prob-row { display: grid; gap: 4px; font-size: 0.85rem; }
+.prob-label { display: flex; justify-content: space-between; }
+.bar-bg {
+  height: 8px;
+  background: var(--bg);
+  border-radius: 999px;
+  overflow: hidden;
+  border: 1px solid var(--border);
+}
+.bar-fill { height: 100%; width: 0%; background: var(--accent); transition: width 0.2s ease; }
+.status { font-size: 0.8rem; color: var(--muted); min-height: 18px; }
+</style>
+</head>
+<body>
+<div class="container">
+<header>
+  <div>
+    <h1>Clasificador Interactivo Iris (FastAPI + scikit-learn)</h1>
+    <p>Mueve los controles o carga un ejemplo para observar cómo cambia la predicción en tiempo real.</p>
+  </div>
+  <div class="api-bar">
+    <input id="apiUrl" type="text" value="http://127.0.0.1:8002/predict" aria-label="URL del endpoint /predict" />
+    <button id="predictBtn" class="primary">Predecir</button>
+  </div>
+</header>
+
+<div class="grid">
+  <section class="card">
+    <div class="card-title">1. Variables de entrada (cm)</div>
+    <div class="presets">
+      <button type="button" data-preset="setosa">Ejemplo Setosa</button>
+      <button type="button" data-preset="versicolor">Ejemplo Versicolor</button>
+      <button type="button" data-preset="virginica">Ejemplo Virginica</button>
+      <label style="display:flex;align-items:center;gap:6px;font-size:0.82rem;color:var(--muted);margin-left:auto;">
+        <input id="autoPredict" type="checkbox" checked /> Auto-predecir al mover
+      </label>
+    </div>
+    <div class="control">
+      <div class="control-top">
+        <label for="sepal_length">Largo del sépalo (sepal_length)</label>
+        <strong id="val_sepal_length">5.1</strong>
+      </div>
+      <input id="sepal_length" type="range" min="4.0" max="8.0" step="0.1" value="5.1" />
+      <span class="control-hint">Rango típico: 4.3 – 7.9 cm</span>
+    </div>
+    <div class="control">
+      <div class="control-top">
+        <label for="sepal_width">Ancho del sépalo (sepal_width)</label>
+        <strong id="val_sepal_width">3.5</strong>
+      </div>
+      <input id="sepal_width" type="range" min="2.0" max="4.5" step="0.1" value="3.5" />
+      <span class="control-hint">Rango típico: 2.0 – 4.4 cm</span>
+    </div>
+    <div class="control">
+      <div class="control-top">
+        <label for="petal_length">Largo del pétalo (petal_length)</label>
+        <strong id="val_petal_length">1.4</strong>
+      </div>
+      <input id="petal_length" type="range" min="1.0" max="7.0" step="0.1" value="1.4" />
+      <span class="control-hint">Variable clave para separar especies (1.0 – 6.9 cm)</span>
+    </div>
+    <div class="control">
+      <div class="control-top">
+        <label for="petal_width">Ancho del pétalo (petal_width)</label>
+        <strong id="val_petal_width">0.2</strong>
+      </div>
+      <input id="petal_width" type="range" min="0.1" max="2.5" step="0.1" value="0.2" />
+      <span class="control-hint">Rango típico: 0.1 – 2.5 cm</span>
+    </div>
+  </section>
+
+  <section class="card">
+    <div class="card-title">2. Respuesta del modelo</div>
+    <div class="result-box">
+      <span class="meta">Especie predicha</span>
+      <div id="predictionText" class="species">—</div>
+      <div id="metaText" class="meta">Esperando consulta...</div>
+    </div>
+    <div class="prob-list" id="probList">
+      <div class="prob-row">
+        <div class="prob-label"><span>setosa</span><span id="p_setosa">0%</span></div>
+        <div class="bar-bg"><div id="b_setosa" class="bar-fill"></div></div>
+      </div>
+      <div class="prob-row">
+        <div class="prob-label"><span>versicolor</span><span id="p_versicolor">0%</span></div>
+        <div class="bar-bg"><div id="b_versicolor" class="bar-fill"></div></div>
+      </div>
+      <div class="prob-row">
+        <div class="prob-label"><span>virginica</span><span id="p_virginica">0%</span></div>
+        <div class="bar-bg"><div id="b_virginica" class="bar-fill"></div></div>
+      </div>
+    </div>
+    <div id="statusText" class="status"></div>
+  </section>
+</div>
+</div>
+
+<script>
+const fields = ["sepal_length", "sepal_width", "petal_length", "petal_width"];
+const presets = {
+  setosa:     { sepal_length: 5.1, sepal_width: 3.5, petal_length: 1.4, petal_width: 0.2 },
+  versicolor: { sepal_length: 5.9, sepal_width: 3.0, petal_length: 4.2, petal_width: 1.5 },
+  virginica:  { sepal_length: 6.7, sepal_width: 3.0, petal_length: 5.2, petal_width: 2.3 }
+};
+const apiInput = document.getElementById("apiUrl");
+const autoPredict = document.getElementById("autoPredict");
+const statusText = document.getElementById("statusText");
+
+function getPayload() {
+  const payload = {};
+  for (const f of fields) {
+    const val = parseFloat(document.getElementById(f).value);
+    document.getElementById("val_" + f).textContent = val.toFixed(1);
+    payload[f] = val;
+  }
+  return payload;
+}
+
+function renderPrediction(data) {
+  document.getElementById("predictionText").textContent = data.prediction ?? "—";
+  const conf = typeof data.confidence === "number" ? (data.confidence * 100).toFixed(1) + "%" : "—";
+  document.getElementById("metaText").textContent = `class_id: ${data.class_id ?? "—"} · confianza: ${conf}`;
+  const probs = data.probabilities || {};
+  for (const cls of ["setosa", "versicolor", "virginica"]) {
+    const pct = ((probs[cls] ?? 0) * 100).toFixed(1);
+    document.getElementById("p_" + cls).textContent = pct + "%";
+    document.getElementById("b_" + cls).style.width = Math.min(100, Math.max(0, pct)) + "%";
+  }
+}
+
+async function runPrediction() {
+  const url = apiInput.value.trim();
+  const payload = getPayload();
+  statusText.textContent = "Consultando modelo...";
+  try {
+    const res = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload)
+    });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = await res.json();
+    renderPrediction(data);
+    statusText.textContent = `Listo (${new Date().toLocaleTimeString()})`;
+  } catch (err) {
+    statusText.textContent = `Error de conexión: ${err.message}. Revisa CORS o la URL de la API.`;
+  }
+}
+
+fields.forEach((f) => {
+  document.getElementById(f).addEventListener("input", () => {
+    getPayload();
+    if (autoPredict.checked) runPrediction();
+  });
+});
+
+document.querySelectorAll("[data-preset]").forEach((btn) => {
+  btn.addEventListener("click", () => {
+    const p = presets[btn.dataset.preset];
+    for (const f of fields) document.getElementById(f).value = p[f];
+    getPayload();
+    runPrediction();
+  });
+});
+
+document.getElementById("predictBtn").addEventListener("click", runPrediction);
+getPayload();
+runPrediction();
+</script>
+</body>
+</html>
