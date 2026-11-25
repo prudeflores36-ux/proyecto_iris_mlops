@@ -1,5 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import HTMLResponse
+from pathlib import Path
 from pydantic import BaseModel, Field
 import joblib
 import numpy as np
@@ -33,8 +35,13 @@ def root():
     return {
         "status": "ok",
         "service": "iris-classifier-api",
-        "endpoints": ["GET /", "POST /predict"]
+        "endpoints": ["GET /", "GET /ui", "POST /predict"]
     }
+
+@app.get("/ui", response_class=HTMLResponse)
+def ui():
+    html_path = Path(__file__).parent / "index.html"
+    return html_path.read_text(encoding="utf-8")
 
 @app.post("/predict")
 def predict(data: IrisInput):
