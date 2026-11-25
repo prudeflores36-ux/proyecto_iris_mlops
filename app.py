@@ -8,7 +8,13 @@ import numpy as np
 
 CLASS_NAMES = ["setosa", "versicolor", "virginica"]
 
-model = joblib.load("iris_model.pkl")
+loaded = joblib.load("iris_model.pkl")
+if isinstance(loaded, dict):
+    model = loaded["model"]
+    if "target_names" in loaded and len(loaded["target_names"]) == 3:
+        CLASS_NAMES = list(loaded["target_names"])
+else:
+    model = loaded
 
 app = FastAPI(
     title="Iris Classifier Microservice",
