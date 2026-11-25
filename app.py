@@ -1,69 +1,67 @@
+from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel, Field
 import joblib
 import numpy as np
-from fastapi import FastAPI, HTTPException
-from pydantic import BaseModel, Field
 
-# 1. Inicializar la aplicación FastAPI
+CLASS_NAMES = ["setosa", "versicolor", "virginica"]
+
+model = joblib.load("iris_model.pkl")
+
 app = FastAPI(
-    title="Microservicio de Inferencia Iris",
-    description="API REST contenerizada para predicción de especies de la flor Iris.",
+    title="Iris Classifier Microservice",
     version="1.0.0",
+    description="API REST con FastAPI y scikit-learn para clasificar especies de Iris."
 )
 
-# 2. Cargar el artefacto del modelo al iniciar la API
-try:
-    artifact = joblib.load("iris_model.pkl")
-    model = artifact["model"]
-    target_names = artifact["target_names"]
-except Exception as e:
-    raise RuntimeError(f"Error al cargar el archivo del modelo: {e}")
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=False,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
+class IrisInput(BaseModel):
+    sepal_length: float = Field(..., ge=0.0, le=20.0)
+    sepal_width: float = Field(..., ge=0.0, le=20.0)
+    petal_length: float = Field(..., ge=0.0, le=20.0)
+    petal_width: float = Field(..., ge=0.0, le=20.0)
 
-# 3. Esquema de validación estricta para la petición con Pydantic
-class IrisRequest(BaseModel):
-    sepal_length: float = Field(..., example=5.1, description="Longitud del sépalo en cm")
-    sepal_width: float = Field(..., example=3.5, description="Ancho del sépalo en cm")
-    petal_length: float = Field(..., example=1.4, description="Longitud del pétalo en cm")
-    petal_width: float = Field(..., example=0.2, description="Ancho del pétalo en cm")
-
-
-# 4. Endpoint de comprobación de estado (Health Check)
 @app.get("/")
-def read_root():
+def root():
     return {
-        "status": "online",
-        "service": "Iris Classifier Microservice",
-        "dataset_info": "150 instancias, 4 características, 3 clases",
+        "status": "ok",
+        "service": "iris-classifier-api",
+        "endpoints": ["GET /", "POST /predict"]
     }
 
-
-# 5. Endpoint de inferencia POST
 @app.post("/predict")
-def predict_species(request: IrisRequest):
-    try:
-        # Convertir las características a formato vectorial (1, 4)
-        features = np.array([[
-            request.sepal_length,
-            request.sepal_width,
-            request.petal_length,
-            request.petal_width,
-        ]])
+def predict(data: IrisInput):
+    features = np.array([[
+        data.sepal_length,
+        data.sepal_width,
+        data.petal_length,
+        data.petal_width
+    ]], dtype=float)
 
-        # Realizar la predicción y obtener probabilidades
-        prediction_id = int(model.predict(features)[0])
-        probabilities = model.predict_proba(features)[0]
+    class_id = int(model.predict(features)[0])
+    prediction = CLASS_NAMES[class_id]
 
-        predicted_class = target_names[prediction_id]
-        confidence = float(probabilities[prediction_id])
-
-        return {
-            "prediction": predicted_class,
-            "class_id": prediction_id,
-            "confidence": round(confidence, 4),
-            "probabilities": {
-                name: round(float(prob), 4)
-                for name, prob in zip(target_names, probabilities)
-            },
+    if hasattr(model, "predict_proba"):
+        probs_raw = model.predict_proba(features)[0]
+        probabilities = {
+            CLASS_NAMES[i]: round(float(probs_raw[i]), 4)
+            for i in range(len(CLASS_NAMES))
         }
-    except Exception as err:
-        raise HTTPException(status_code=500, detail=f"Error en la inferencia: {str(err)}")
+        confidence = round(float(np.max(probs_raw)), 4)
+    else:
+        probabilities = {name: (1.0 if i == class_id else 0.0) for i, name in enumerate(CLASS_NAMES)}
+        confidence = 1.0
+
+    return {
+        "prediction": prediction,
+        "class_id": class_id,
+        "confidence": confidence,
+        "probabilities": probabilities
+    }
